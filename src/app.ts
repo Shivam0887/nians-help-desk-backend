@@ -24,10 +24,18 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// Health check endpoints (for Render periodic monitoring and liveness checks)
+const healthHandler = (_req: express.Request, res: express.Response) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+};
+
+app.get('/healthz', healthHandler);
+app.get('/api/healthz', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Global error handler (must be last)
 app.use(errorHandler);
