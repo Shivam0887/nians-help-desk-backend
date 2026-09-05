@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum Role {
+  customer
+  admin
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum Category {
+  bug
+  feature
+  question
+  uncategorized
+  other
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String?
+  googleId  String?  @unique
+  avatar    String?
+  role      Role     @default(customer)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets       Ticket[]
+  statusChanges StatusHistory[]
+
+  @@index([email])
+  @@index([googleId])
+}
+
+model Ticket {
+  id             String       @id @default(cuid())
+  ticketId       String       @unique
+  title          String
+  description    String
+  status         TicketStatus @default(open)
+  priority       Priority     @default(medium)
+  category       Category     @default(uncategorized)
+  customCategory String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  attachments   Attachment[]
+  statusHistory StatusHistory[]
+  aiSuggestion  AiSuggestion?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Attachment {
+  id       String @id @default(cuid())
+  url      String
+  filename String
+  mimetype String
+  size     Int
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model StatusHistory {
+  id        String       @id @default(cuid())
+  from      TicketStatus
+  to        TicketStatus
+  note      String?
+  changedAt DateTime     @default(now())
+
+  changedById String
+  changedBy   User   @relation(fields: [changedById], references: [id])
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([changedAt(sort: Desc)])
+}
+
+model AiSuggestion {
+  id                String  @id @default(cuid())
+  suggestedCategory String
+  suggestedPriority String
+  confidence        Float
+  applied           Boolean @default(false)
+
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
