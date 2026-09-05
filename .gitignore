@@ -8,7 +8,8 @@ dist/
 build/
 
 # Uploads and temporary file storage
-uploads/
+uploads/*
+!uploads/.gitkeep
 
 # Environment files
 .env

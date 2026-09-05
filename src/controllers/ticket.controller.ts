@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import fs from 'fs';
 import prisma from '../config/db.ts';
 import { ApiError } from '../utils/ApiError.ts';
 import { asyncHandler } from '../utils/asyncHandler.ts';
@@ -31,6 +32,11 @@ export const createTicket = asyncHandler(async (req: Request, res: Response): Pr
           folder: 'helpdesk/attachments',
           resource_type: 'auto',
         });
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          // ignore cleanup error
+        }
         attachments.push({
           url: result.secure_url,
           filename: file.originalname,
@@ -38,8 +44,10 @@ export const createTicket = asyncHandler(async (req: Request, res: Response): Pr
           size: file.size,
         });
       } else {
+        const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+        const host = req.get('host') || 'localhost:5000';
         attachments.push({
-          url: `/uploads/${file.filename}`,
+          url: `${proto}://${host}/uploads/${file.filename}`,
           filename: file.originalname,
           mimetype: file.mimetype,
           size: file.size,

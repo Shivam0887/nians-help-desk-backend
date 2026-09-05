@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import passport from './config/passport.ts';
 import { env } from './config/env.ts';
 import { errorHandler } from './middleware/errorHandler.ts';
@@ -10,6 +11,9 @@ import analyticsRoutes from './routes/analytics.routes.ts';
 
 const app = express();
 
+// Trust reverse proxy (Render, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // Core middleware
 app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
 app.use(express.json());
@@ -17,7 +21,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
 // Static file serving for local uploads
-app.use('/uploads', express.static(path.resolve('uploads')));
+const uploadsDir = path.resolve('uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // API routes
 app.use('/api/auth', authRoutes);
