@@ -1,6 +1,14 @@
+import dns from 'node:dns';
 import app from './src/app.ts';
 import { env } from './src/config/env.ts';
 import prisma from './src/config/db.ts';
+
+// Enforce IPv4 lookups to prevent ENETUNREACH on cloud environments (Render, etc.)
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  // Ignore in environments where not supported
+}
 
 async function main() {
   try {

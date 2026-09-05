@@ -1,5 +1,14 @@
 import nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
+import dns from 'node:dns';
 import { env } from '../config/env.ts';
+
+// Enforce IPv4 lookups to prevent ENETUNREACH on cloud environments (Render, etc.)
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  // Ignore
+}
 
 const isConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
 
@@ -7,12 +16,14 @@ const transporter = isConfigured
   ? nodemailer.createTransport({
       host: env.SMTP_HOST,
       port: env.SMTP_PORT ?? 587,
-      secure: false,
+      secure: env.SMTP_PORT === 465,
       auth: {
         user: env.SMTP_USER,
         pass: env.SMTP_PASS,
       },
-    })
+      // Force IPv4 socket connection to prevent ENETUNREACH on cloud platforms
+      family: 4,
+    } as SMTPTransport.Options)
   : null;
 
 /**
