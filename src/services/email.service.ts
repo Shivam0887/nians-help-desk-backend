@@ -26,7 +26,10 @@ export async function sendStatusChangeEmail(
   toStatus: string,
   note?: string
 ): Promise<void> {
-  if (!transporter) return;
+  if (!transporter) {
+    console.log(`[EmailService] SMTP not configured. Skipped status change email for ticket ${ticketId} to ${to}`);
+    return;
+  }
 
   const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 
@@ -45,4 +48,6 @@ export async function sendStatusChangeEmail(
       </div>
     `,
   });
+
+  console.log(`[EmailService] Status change email dispatched for ticket ${ticketId} to ${to}`);
 }
