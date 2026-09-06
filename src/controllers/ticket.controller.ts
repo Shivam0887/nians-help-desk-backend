@@ -8,6 +8,7 @@ import type { CreateTicketInput, UpdateTicketStatusInput } from '../schemas/tick
 import { cloudinary, isCloudinaryConfigured } from '../config/cloudinary.ts';
 import { triageTicket } from '../services/ai-triage.service.ts';
 import { sendStatusChangeEmail } from '../services/email.service.ts';
+import { notificationService } from '../services/notification.service.ts';
 import type { Prisma, TicketStatus, Priority, Category } from '../../prisma/generated/client/index.js';
 
 // Counter for human-readable ticket IDs
@@ -114,6 +115,11 @@ export const createTicket = asyncHandler(async (req: Request, res: Response): Pr
       createdBy: { select: { id: true, name: true, email: true } },
     },
   });
+
+  // Notify admins via in-app notification & live SSE update (non-blocking)
+  notificationService
+    .notifyAdminsOfNewTicket(ticket, ticket.createdBy?.name ?? req.user.name ?? 'Customer')
+    .catch((err) => console.error('[TicketController] Error notifying admins:', err));
 
   res.status(201).json({
     success: true,
@@ -251,6 +257,11 @@ export const updateTicketStatus = asyncHandler(async (req: Request, res: Respons
     },
   });
 
+  // Send in-app notification & live SSE update (non-blocking)
+  notificationService
+    .notifyUserOfStatusChange(updatedTicket, ticket.status, status, note)
+    .catch((err) => console.error('[TicketController] Error dispatching status notification:', err));
+
   // Send email notification (non-blocking)
   sendStatusChangeEmail(
     ticket.createdBy.email,
@@ -275,6 +286,9 @@ export const deleteTicket = asyncHandler(async (req: Request, res: Response): Pr
   }
 
   await prisma.ticket.delete({ where: { id } });
+
+  // Broadcast deletion event to connected clients
+  notificationService.broadcastTicketDeleted(id);
 
   res.json({
     success: true,

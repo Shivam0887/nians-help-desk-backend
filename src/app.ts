@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/errorHandler.ts';
 import authRoutes from './routes/auth.routes.ts';
 import ticketRoutes from './routes/ticket.routes.ts';
 import analyticsRoutes from './routes/analytics.routes.ts';
+import notificationRoutes from './routes/notification.routes.ts';
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/uploads', express.static(uploadsDir));
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoints (for Render periodic monitoring and liveness checks)
 const healthHandler = (_req: express.Request, res: express.Response) => {

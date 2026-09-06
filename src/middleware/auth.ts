@@ -30,13 +30,18 @@ declare global {
  * payload to req.user. Rejects if token is missing, expired, or invalid.
  */
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
+  let token = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.split(' ')[1]
+    : undefined;
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw ApiError.unauthorized('Missing or malformed authorization header');
+  // Support token in query parameter for EventSource / SSE connections
+  if (!token && typeof req.query.token === 'string') {
+    token = req.query.token;
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    throw ApiError.unauthorized('Missing or malformed authorization header');
+  }
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;

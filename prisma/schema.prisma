@@ -48,6 +48,7 @@ model User {
 
   tickets       Ticket[]
   statusChanges StatusHistory[]
+  notifications Notification[]
 
   @@index([email])
   @@index([googleId])
@@ -117,4 +118,20 @@ model AiSuggestion {
 
   ticketId String @unique
   ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketId  String?
+  title     String
+  message   String
+  type      String   @default("status_change")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt(sort: Desc)])
 }
