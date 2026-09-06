@@ -1,10 +1,11 @@
+import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { env } from '../config/env.ts';
 
 const isSmtpConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
-const isResendConfigured = Boolean(env.RESEND_API_KEY);
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
 async function getSmtpTransporter() {
   if (!isSmtpConfigured) return null;
@@ -72,35 +73,47 @@ export async function sendStatusChangeEmail(
     </div>
   `;
 
-  // 1. Priority: Resend REST API over HTTPS (port 443)
-  if (isResendConfigured && env.RESEND_API_KEY) {
+  // 1. Priority: Resend Node.js SDK over HTTPS (port 443)
+  if (resend) {
     const from = env.EMAIL_FROM ?? env.SMTP_FROM ?? 'Helpdesk <onboarding@resend.dev>';
     try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from,
-          to: [to],
-          subject,
-          html,
-        }),
+      const { data, error } = await resend.emails.send({
+        from,
+        to: [to],
+        subject,
+        html,
       });
 
-      const result = (await response.json().catch(() => ({}))) as { id?: string; message?: string; error?: unknown };
+      if (error) {
+        // In Resend sandbox mode (onboarding@resend.dev), Resend only allows sending to the account owner email.
+        // If rejected with a 403, automatically redirect to the owner email so test updates succeed and arrive in inbox.
+        if (
+          (error as any).statusCode === 403 &&
+          typeof error.message === 'string' &&
+          error.message.includes('only send testing emails to your own email address')
+        ) {
+          const match = error.message.match(/\(([^)]+)\)/);
+          const ownerEmail = match ? match[1] : (env.RESEND_TEST_EMAIL ?? 'shivamsharma0887@gmail.com');
+          if (ownerEmail && ownerEmail.toLowerCase() !== to.toLowerCase()) {
+            console.log(`[EmailService] Resend sandbox restriction: Redirecting test email from ${to} to verified owner ${ownerEmail}`);
+            return sendStatusChangeEmail(
+              ownerEmail,
+              ticketId,
+              fromStatus,
+              toStatus,
+              note ? `${note} (Original intended recipient: ${to})` : `Original intended recipient: ${to}`
+            );
+          }
+        }
 
-      if (!response.ok) {
-        console.error(`[EmailService] Resend API error (${response.status}):`, result.message || result);
+        console.error('[EmailService] Resend API error:', error);
         return;
       }
 
-      console.log(`[EmailService] Status change email dispatched via Resend API (id: ${result.id}) for ticket ${ticketId} to ${to}`);
+      console.log(`[EmailService] Status change email dispatched via Resend (id: ${data?.id}) for ticket ${ticketId} to ${to}`);
       return;
     } catch (err) {
-      console.error('[EmailService] Failed to send email via Resend API:', err);
+      console.error('[EmailService] Failed to send email via Resend SDK:', err);
       return;
     }
   }
