@@ -1,30 +1,42 @@
 import nodemailer from 'nodemailer';
-import type SMTPTransport from 'nodemailer/lib/smtp-transport';
-import dns from 'node:dns';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { env } from '../config/env.ts';
-
-// Enforce IPv4 lookups to prevent ENETUNREACH on cloud environments (Render, etc.)
-try {
-  dns.setDefaultResultOrder('ipv4first');
-} catch {
-  // Ignore
-}
 
 const isConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
 
-const transporter = isConfigured
-  ? nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT ?? 587,
-      secure: env.SMTP_PORT === 465,
-      auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-      },
-      // Force IPv4 socket connection to prevent ENETUNREACH on cloud platforms
-      family: 4,
-    } as SMTPTransport.Options)
-  : null;
+async function getTransporter() {
+  if (!isConfigured) return null;
+
+  let host = env.SMTP_HOST!;
+  const servername = host;
+
+  // On Render and cloud container platforms without IPv6 outbound routing,
+  // resolve hostname to an explicit IPv4 address to prevent ENETUNREACH errors.
+  if (!net.isIP(host)) {
+    try {
+      const res = await dns.lookup(host, { family: 4 });
+      if (res?.address) {
+        host = res.address;
+      }
+    } catch (err) {
+      console.warn('[EmailService] DNS IPv4 lookup failed, using original hostname:', err);
+    }
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port: env.SMTP_PORT ?? 587,
+    secure: env.SMTP_PORT === 465,
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+    tls: {
+      servername,
+    },
+  });
+}
 
 /**
  * Sends an email notification when a ticket's status changes.
@@ -37,6 +49,7 @@ export async function sendStatusChangeEmail(
   toStatus: string,
   note?: string
 ): Promise<void> {
+  const transporter = await getTransporter();
   if (!transporter) {
     console.log(`[EmailService] SMTP not configured. Skipped status change email for ticket ${ticketId} to ${to}`);
     return;
